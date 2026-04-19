@@ -1,193 +1,456 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from "react";
 
-// Realistic templates to feed the simulation
 const SIMULATION_TEMPLATES = [
-  { Day_of_Week: "Monday", Time: 12, Type_of_Card: "Visa", Entry_Mode: "Tap", Amount: 12.50, Type_of_Transaction: "POS", Merchant_Group: "Restaurant", Country_of_Transaction: "United Kingdom", Shipping_Address: "United Kingdom", Country_of_Residence: "United Kingdom", Gender: "M", Age: 34.0, Bank: "Barclays" },
-  { Day_of_Week: "Friday", Time: 19, Type_of_Card: "MasterCard", Entry_Mode: "PIN", Amount: 65.00, Type_of_Transaction: "POS", Merchant_Group: "Entertainment", Country_of_Transaction: "United Kingdom", Shipping_Address: "United Kingdom", Country_of_Residence: "United Kingdom", Gender: "F", Age: 28.5, Bank: "Monzo" },
-  { Day_of_Week: "Sunday", Time: 3, Type_of_Card: "Visa", Entry_Mode: "CVC", Amount: 2450.00, Type_of_Transaction: "Online", Merchant_Group: "Electronics", Country_of_Transaction: "China", Shipping_Address: "China", Country_of_Residence: "United Kingdom", Gender: "M", Age: 55.0, Bank: "Halifax" }, // High Risk
-  { Day_of_Week: "Wednesday", Time: 9, Type_of_Card: "MasterCard", Entry_Mode: "Tap", Amount: 4.20, Type_of_Transaction: "POS", Merchant_Group: "Food", Country_of_Transaction: "United Kingdom", Shipping_Address: "United Kingdom", Country_of_Residence: "United Kingdom", Gender: "M", Age: 41.0, Bank: "HSBC" }
-]
+  {
+    Day_of_Week: "Monday",
+    Time: 12,
+    Type_of_Card: "Visa",
+    Entry_Mode: "Tap",
+    Amount: 12.5,
+    Type_of_Transaction: "POS",
+    Merchant_Group: "Restaurant",
+    Country_of_Transaction: "United Kingdom",
+    Shipping_Address: "United Kingdom",
+    Country_of_Residence: "United Kingdom",
+    Gender: "M",
+    Age: 34.0,
+    Bank: "Barclays",
+  },
+  {
+    Day_of_Week: "Friday",
+    Time: 19,
+    Type_of_Card: "MasterCard",
+    Entry_Mode: "PIN",
+    Amount: 65.0,
+    Type_of_Transaction: "POS",
+    Merchant_Group: "Entertainment",
+    Country_of_Transaction: "United Kingdom",
+    Shipping_Address: "United Kingdom",
+    Country_of_Residence: "United Kingdom",
+    Gender: "F",
+    Age: 28.5,
+    Bank: "Monzo",
+  },
+  {
+    Day_of_Week: "Sunday",
+    Time: 3,
+    Type_of_Card: "Visa",
+    Entry_Mode: "CVC",
+    Amount: 2450.0,
+    Type_of_Transaction: "Online",
+    Merchant_Group: "Electronics",
+    Country_of_Transaction: "Russia",
+    Shipping_Address: "Russia",
+    Country_of_Residence: "United Kingdom",
+    Gender: "M",
+    Age: 55.0,
+    Bank: "Halifax",
+  },
+  {
+    Day_of_Week: "Wednesday",
+    Time: 9,
+    Type_of_Card: "MasterCard",
+    Entry_Mode: "Tap",
+    Amount: 4.2,
+    Type_of_Transaction: "POS",
+    Merchant_Group: "Food",
+    Country_of_Transaction: "United Kingdom",
+    Shipping_Address: "United Kingdom",
+    Country_of_Residence: "United Kingdom",
+    Gender: "M",
+    Age: 41.0,
+    Bank: "HSBC",
+  },
+];
+
+// Only kept for values used in dynamic/computed inline styles
+const C = {
+  danger: "#ff3b3b",
+  dangerBg: "rgba(255,59,59,0.08)",
+  ok: "#00d68f",
+  okBg: "rgba(0,214,143,0.08)",
+  warn: "#f5a623",
+  accent: "#6c7fff",
+  accentBg: "rgba(108,127,255,0.08)",
+  muted: "#4e4e62",
+  text: "#dddde8",
+  border: "#1e1e26",
+  dim: "#2a2a36",
+};
 
 function App() {
-  const [feed, setFeed] = useState([])
-  const [activeItem, setActiveItem] = useState(null)
-  const [isSimulating, setIsSimulating] = useState(false)
-  const simulationRef = useRef(null)
+  const [feed, setFeed] = useState([]);
+  const [activeItem, setActiveItem] = useState(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const simulationRef = useRef(null);
 
-  // Generate a random transaction with slight jitter
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+
+    const style = document.createElement("style");
+    style.textContent = `
+      body, #root { margin: 0; padding: 0; width: 100%; }
+      ::-webkit-scrollbar { width: 3px; }
+      ::-webkit-scrollbar-track { background: #07070a; }
+      ::-webkit-scrollbar-thumb { background: #1e1e26; border-radius: 2px; }
+      .font-syne  { font-family: 'Syne', sans-serif; }
+      .font-mono  { font-family: 'IBM Plex Mono', monospace; }
+      @keyframes slideIn  { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes pulseRed { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      @keyframes barFill  { from { width: 0%; } }
+      .tx-row   { animation: slideIn  0.25s ease forwards; }
+      .blink    { animation: pulseRed 1.2s ease infinite; }
+      .bar-fill { animation: barFill  0.6s cubic-bezier(0.22,1,0.36,1) forwards; }
+      
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(link);
+      document.head.removeChild(style);
+    };
+  }, []);
+
   const generateTransaction = () => {
-    const template = SIMULATION_TEMPLATES[Math.floor(Math.random() * SIMULATION_TEMPLATES.length)]
-    // Add slight randomization to amount so it doesn't look static
-    const jitterAmount = template.Amount * (1 + (Math.random() * 0.1 - 0.05))
-    return { ...template, Amount: parseFloat(jitterAmount.toFixed(2)) }
-  }
+    const t =
+      SIMULATION_TEMPLATES[
+        Math.floor(Math.random() * SIMULATION_TEMPLATES.length)
+      ];
+    return {
+      ...t,
+      Amount: parseFloat(
+        (t.Amount * (1 + (Math.random() * 0.1 - 0.05))).toFixed(2),
+      ),
+    };
+  };
 
   const processTransaction = async (txData) => {
     try {
-      const response = await fetch('http://localhost:8000/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(txData)
-      })
-      const result = await response.json()
-      
-      const enrichedData = {
+      const response = await fetch("http://localhost:8000/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(txData),
+      });
+      const result = await response.json();
+      const enriched = {
         id: Math.random().toString(36).substr(2, 9),
-        timestamp: new Date().toLocaleTimeString(),
+        timestamp: new Date().toLocaleTimeString("en-GB", { hour12: false }),
         input: txData,
-        ...result
-      }
-
-      setFeed(prev => [enrichedData, ...prev].slice(0, 50)) // Keep last 50
-      if (result.is_flagged) setActiveItem(enrichedData) // Auto-focus high risk
-      
-    } catch (error) {
-      console.error("API Error:", error)
+        ...result,
+      };
+      setFeed((prev) => [enriched, ...prev].slice(0, 50));
+      if (result.is_flagged) setActiveItem(enriched);
+    } catch (e) {
+      console.error(e);
     }
-  }
+  };
 
-  // The Simulation Loop
   useEffect(() => {
     if (isSimulating) {
-      // Run every 5 seconds to give the LLM time to respond if flagged
-      simulationRef.current = setInterval(() => {
-        processTransaction(generateTransaction())
-      }, 5000)
+      simulationRef.current = setInterval(
+        () => processTransaction(generateTransaction()),
+        5000,
+      );
     } else {
-      clearInterval(simulationRef.current)
+      clearInterval(simulationRef.current);
     }
-    return () => clearInterval(simulationRef.current)
-  }, [isSimulating])
+    return () => clearInterval(simulationRef.current);
+  }, [isSimulating]);
 
-  // Minimal Industrial Styling Variables
-  const theme = {
-    bg: '#f4f4f5', // zinc-100
-    panel: '#ffffff',
-    border: '#e4e4e7', // zinc-200
-    textMain: '#27272a', // zinc-800
-    textMuted: '#a1a1aa', // zinc-400
-    accent: '#3b82f6', // blue-500
-    danger: '#ef4444', // red-500
-    success: '#10b981', // emerald-500
-    fontUI: 'system-ui, -apple-system, sans-serif',
-    fontData: '"JetBrains Mono", "Roboto Mono", monospace'
-  }
+  const calculateFeatureRisk = (tx) => {
+    if (!tx) return [];
+    return [
+      {
+        label: "GEO-SPATIAL MISMATCH",
+        score: tx.Country_of_Transaction !== tx.Country_of_Residence ? 95 : 10,
+      },
+      {
+        label: "TEMPORAL ANOMALY",
+        score: tx.Time < 6 || tx.Time > 23 ? 88 : 15,
+      },
+      {
+        label: "VALUE VELOCITY",
+        score: tx.Amount > 1000 ? 92 : tx.Amount > 200 ? 45 : 12,
+      },
+    ];
+  };
+
+  // ── ATOMS ────────────────────────────────────────────────
+
+  const Label = ({ children, className = "" }) => (
+    <span
+      className={`font-mono text-[0.65rem] tracking-[0.12em] text-[#4e4e62] uppercase ${className}`}
+    >
+      {children}
+    </span>
+  );
+
+  const Chip = ({ flagged, value }) => (
+    <span
+      className="font-mono text-[0.72rem] font-medium py-[0.2rem] px-[0.55rem] rounded-[2px]"
+      style={{
+        background: flagged ? C.dangerBg : C.okBg,
+        color: flagged ? C.danger : C.ok,
+        border: `1px solid ${flagged ? C.danger + "44" : C.ok + "44"}`,
+      }}
+    >
+      {value}
+    </span>
+  );
+
+  const KV = ({ k, v, highlight }) => (
+    <div className="flex justify-between items-center py-[0.55rem] border-b border-[#1e1e26]">
+      <Label>{k}</Label>
+      <span
+        className="font-mono text-[0.78rem]"
+        style={{ color: highlight ? C.danger : C.text }}
+      >
+        {v}
+      </span>
+    </div>
+  );
+
+  const RiskBar = ({ label, score }) => {
+    const color = score > 75 ? C.danger : score > 40 ? C.warn : C.ok;
+    return (
+      <div className="mb-[1.1rem]">
+        <div className="flex justify-between mb-[0.4rem]">
+          <Label>{label}</Label>
+          <span
+            className="font-mono text-[0.72rem] font-medium"
+            style={{ color }}
+          >
+            {score}%
+          </span>
+        </div>
+        <div
+          className="h-[2px] rounded-[1px] overflow-hidden"
+          style={{ background: C.dim }}
+        >
+          <div
+            className="h-full rounded-[1px] bar-fill"
+            style={{ width: `${score}%`, background: color }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const PanelHeader = ({ title, right }) => (
+    <div className="flex justify-between items-center py-3 px-5 border-b border-[#1e1e26] bg-[#141418]">
+      <Label>{title}</Label>
+      {right}
+    </div>
+  );
+
+  const flagged = activeItem?.is_flagged;
+  const features = calculateFeatureRisk(activeItem?.input);
 
   return (
-    <div style={{ fontFamily: theme.fontUI, backgroundColor: theme.bg, minHeight: '100vh', padding: '2rem', color: theme.textMain }}>
-      
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: `1px solid ${theme.border}`, paddingBottom: '1rem' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', letterSpacing: '-0.5px' }}>SecureFlow // Analytics Core</h1>
-          <p style={{ margin: '0.2rem 0 0 0', color: theme.textMuted, fontSize: '0.85rem' }}>Autonomous Fraud Detection & Resolution</p>
+    <div className="font-syne bg-[#07070a] min-h-screen w-full text-[#dddde8] flex flex-col">
+      {/* ── TOPBAR ── */}
+      <header className="flex justify-between items-center h-14 px-5 border-b border-[#1e1e26] bg-[#0e0e12] shrink-0">
+        <div className="flex items-center gap-6">
+          <span className="font-syne font-bold text-base tracking-[-0.02em]">
+            SecureFlow
+          </span>
+          <div className="w-px h-[14px] bg-[#1e1e26]" />
+          <Label>Fraud Intelligence Platform</Label>
         </div>
-        
-        <button 
-          onClick={() => setIsSimulating(!isSimulating)}
-          style={{
-            padding: '0.5rem 1.5rem',
-            backgroundColor: isSimulating ? theme.panel : theme.textMain,
-            color: isSimulating ? theme.danger : '#fff',
-            border: `1px solid ${isSimulating ? theme.danger : theme.textMain}`,
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontWeight: '500',
-            fontFamily: theme.fontUI,
-            transition: 'all 0.2s'
-          }}
-        >
-          {isSimulating ? '■ STOP SIMULATION' : '▶ START LIVE FEED'}
-        </button>
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', height: 'calc(100vh - 150px)' }}>
-        
-        {/* LEFT PANEL: LIVE DATA FEED */}
-        <div style={{ backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '6px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '1rem', borderBottom: `1px solid ${theme.border}`, backgroundColor: '#fafafa', fontSize: '0.8rem', fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase' }}>
-            Live Transaction Stream
-          </div>
-          
-          <div style={{ overflowY: 'auto', flexGrow: 1, padding: '0.5rem' }}>
-            {feed.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: theme.textMuted, fontFamily: theme.fontData }}>Waiting for telemetry...</div>}
-            
-            {feed.map((item) => (
-              <div 
-                key={item.id} 
-                onClick={() => setActiveItem(item)}
-                style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'auto 1fr auto auto', 
-                  gap: '1rem',
-                  padding: '0.75rem 1rem', 
-                  borderBottom: `1px solid ${theme.border}`,
-                  cursor: 'pointer',
-                  backgroundColor: activeItem?.id === item.id ? '#f0f9ff' : 'transparent',
-                  fontFamily: theme.fontData,
-                  fontSize: '0.85rem',
-                  alignItems: 'center'
-                }}
-              >
-                <span style={{ color: theme.textMuted }}>{item.timestamp}</span>
-                <span>{item.input.Merchant_Group} ({item.input.Country_of_Transaction})</span>
-                <span style={{ fontWeight: '600' }}>£{item.input.Amount.toFixed(2)}</span>
-                <span style={{ 
-                  color: item.is_flagged ? theme.danger : theme.success,
-                  backgroundColor: item.is_flagged ? '#fee2e2' : '#d1fae5',
-                  padding: '0.2rem 0.5rem',
-                  borderRadius: '3px',
-                  fontWeight: 'bold'
-                }}>
-                  {item.fraud_probability.toFixed(1)}%
-                </span>
-              </div>
+        <div className="flex items-center gap-5">
+          {isSimulating && (
+            <div className="flex items-center gap-2">
+              <div
+                className="blink w-1.5 h-1.5 rounded-full"
+                style={{ background: C.ok }}
+              />
+              <Label className="text-[#00d68f]!">LIVE</Label>
+            </div>
+          )}
+          <button
+            onClick={() => setIsSimulating((v) => !v)}
+            className="font-mono text-[0.72rem] tracking-[0.1em] uppercase py-[0.45rem] px-[1.1rem] rounded-[3px] cursor-pointer font-medium transition-all duration-150"
+            style={{
+              background: isSimulating ? C.dangerBg : C.accentBg,
+              color: isSimulating ? C.danger : C.accent,
+              border: `1px solid ${isSimulating ? C.danger + "55" : C.accent + "55"}`,
+            }}
+          >
+            {isSimulating ? "■  Stop Feed" : "▶  Start Feed"}
+          </button>
+        </div>
+      </header>
+
+      {/* ── BODY ── */}
+      <div className="grid grid-cols-[1.05fr_0.95fr] gap-5 p-5 flex-1 overflow-hidden h-[calc(100vh-56px)]">
+        {/* ── LEFT: TRANSACTION STREAM ── */}
+        <div className="bg-[#0e0e12] border border-[#1e1e26] rounded flex flex-col overflow-hidden">
+          <PanelHeader
+            title="Transaction Stream"
+            right={
+              <span className="font-mono text-[0.7rem] text-[#4e4e62]">
+                {feed.length} events
+              </span>
+            }
+          />
+
+          {/* Column headers */}
+          <div className="grid grid-cols-[72px_1fr_80px_72px] gap-2 py-2 px-5 border-b border-[#1e1e26] bg-[#141418]">
+            {["Time", "Merchant / Region", "Amount", "Score"].map((h) => (
+              <Label key={h}>{h}</Label>
             ))}
           </div>
+
+          <div className="overflow-y-auto flex-1">
+            {feed.length === 0 && (
+              <div className="p-12 text-center font-mono text-[0.78rem] text-[#4e4e62]">
+                Awaiting telemetry…
+              </div>
+            )}
+            {feed.map((item) => {
+              const isActive = activeItem?.id === item.id;
+              const isFlag = item.is_flagged;
+              return (
+                <div
+                  key={item.id}
+                  className="tx-row grid grid-cols-[72px_1fr_80px_72px] gap-2 py-[0.65rem] px-5 border-b border-[#1e1e26] cursor-pointer items-center transition-colors duration-150"
+                  style={{
+                    background: isActive
+                      ? C.accentBg
+                      : isFlag
+                        ? C.dangerBg
+                        : "transparent",
+                    borderLeft: `2px solid ${isFlag ? C.danger : isActive ? C.accent : "transparent"}`,
+                  }}
+                  onClick={() => setActiveItem(item)}
+                >
+                  <span className="font-mono text-[0.72rem] text-[#4e4e62]">
+                    {item.timestamp}
+                  </span>
+                  <div>
+                    <span className="font-mono text-[0.78rem] text-[#dddde8]">
+                      {item.input.Merchant_Group}
+                    </span>
+                    <span className="font-mono text-[0.68rem] text-[#4e4e62] ml-2">
+                      {item.input.Country_of_Transaction}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[0.78rem] font-medium text-[#dddde8]">
+                    £{item.input.Amount.toFixed(2)}
+                  </span>
+                  <Chip
+                    flagged={isFlag}
+                    value={`${item.fraud_probability.toFixed(1)}%`}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* RIGHT PANEL: AGENT INTELLIGENCE */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          
-          {/* Metadata Card */}
-          <div style={{ backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '1.5rem' }}>
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', textTransform: 'uppercase', color: theme.textMuted }}>Context Variables</h3>
-            {activeItem ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontFamily: theme.fontData, fontSize: '0.85rem' }}>
-                <div><span style={{ color: theme.textMuted }}>Card:</span> {activeItem.input.Type_of_Card}</div>
-                <div><span style={{ color: theme.textMuted }}>Entry:</span> {activeItem.input.Entry_Mode}</div>
-                <div><span style={{ color: theme.textMuted }}>Location:</span> {activeItem.input.Country_of_Transaction}</div>
-                <div><span style={{ color: theme.textMuted }}>Origin:</span> {activeItem.input.Country_of_Residence}</div>
+        {/* ── RIGHT ── */}
+        <div className="flex flex-col gap-5 overflow-hidden">
+          {/* Context + Vectors */}
+          <div className="grid grid-cols-2 gap-5">
+            {/* Context Variables */}
+            <div className="bg-[#0e0e12] border border-[#1e1e26] rounded overflow-hidden">
+              <PanelHeader title="Context" />
+              <div className="px-5">
+                {activeItem ? (
+                  <>
+                    <KV k="Card Type" v={activeItem.input.Type_of_Card} />
+                    <KV k="Entry Mode" v={activeItem.input.Entry_Mode} />
+                    <KV k="Tx Type" v={activeItem.input.Type_of_Transaction} />
+                    <KV
+                      k="Residence"
+                      v={activeItem.input.Country_of_Residence}
+                    />
+                    <KV
+                      k="Terminal"
+                      v={activeItem.input.Country_of_Transaction}
+                      highlight={
+                        activeItem.input.Country_of_Transaction !==
+                        activeItem.input.Country_of_Residence
+                      }
+                    />
+                    <KV k="Bank" v={activeItem.input.Bank} />
+                  </>
+                ) : (
+                  <p className="font-mono text-[0.75rem] text-[#4e4e62] py-6">
+                    No transaction selected.
+                  </p>
+                )}
               </div>
-            ) : (
-              <div style={{ color: theme.textMuted, fontSize: '0.85rem' }}>Select a transaction from the feed to view parameters.</div>
-            )}
-          </div>
-
-          {/* AI Resolution Console */}
-          <div style={{ backgroundColor: '#18181b', border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '1.5rem', color: '#e4e4e7', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #3f3f46', paddingBottom: '0.5rem' }}>
-              <h3 style={{ margin: 0, fontSize: '0.8rem', textTransform: 'uppercase', color: '#a1a1aa' }}>Agent Resolution Logic</h3>
-              {activeItem?.is_flagged && <span style={{ color: theme.danger, fontSize: '0.8rem', fontWeight: 'bold' }}>⚠️ INTERVENTION REQUIRED</span>}
             </div>
-            
-            <div style={{ fontFamily: theme.fontData, fontSize: '0.9rem', lineHeight: '1.6', whiteSpace: 'pre-wrap', overflowY: 'auto' }}>
-              {!activeItem && <span style={{ color: '#52525b' }}>System idle...</span>}
-              
-              {activeItem && !activeItem.is_flagged && (
-                <span style={{ color: theme.success }}>{"[SYS_LOG]: Transaction cleared. Risk threshold nominal. No agent intervention triggered."}</span>
-              )}
 
-              {activeItem && activeItem.is_flagged && (
-                <span>{`[AGENT_ACTIVE]: Parsing anomaly context...\n\n${activeItem.agent_analysis}`}</span>
-              )}
+            {/* XAI Threat Vectors */}
+            <div className="bg-[#0e0e12] border border-[#1e1e26] rounded overflow-hidden">
+              <PanelHeader title="XAI  ·  Threat Vectors" />
+              <div className="p-5">
+                {activeItem ? (
+                  features.map((f, i) => (
+                    <RiskBar key={i} label={f.label} score={f.score} />
+                  ))
+                ) : (
+                  <p className="font-mono text-[0.75rem] text-[#4e4e62]">
+                    No transaction selected.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
+          {/* Agent Console */}
+          <div className="bg-[#070709] border border-[#1e1e26] rounded flex flex-col flex-1 min-h-0">
+            <PanelHeader
+              title="Agent Resolution Console"
+              right={
+                flagged && (
+                  <span
+                    className="blink font-mono text-[0.68rem] tracking-[0.1em]"
+                    style={{ color: C.danger }}
+                  >
+                    ⚑ INTERVENTION REQUIRED
+                  </span>
+                )
+              }
+            />
+            <div className="flex-1 overflow-y-auto p-5 font-mono text-[0.8rem] leading-[1.8] text-[#dddde8] whitespace-pre-wrap">
+              {!activeItem && (
+                <span className="text-[#2a2a36]">
+                  {"// System idle — select a transaction or start simulation"}
+                </span>
+              )}
+              {activeItem && !flagged && (
+                <span style={{ color: C.ok }}>
+                  {
+                    "[PASS]  Risk threshold nominal\n[PASS]  Transaction cleared — no agent intervention triggered."
+                  }
+                </span>
+              )}
+              {activeItem && flagged && (
+                <>
+                  <span style={{ color: C.danger }}>
+                    {"[ALERT] Anomaly context detected\n"}
+                  </span>
+                  <span className="text-[#2a2a36]">
+                    {"──────────────────────────────\n"}
+                  </span>
+                  <span className="text-[#dddde8]">
+                    {activeItem.agent_analysis}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

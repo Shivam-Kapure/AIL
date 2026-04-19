@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
 import pandas as pd
+import os
 from openai import OpenAI
 
 app = FastAPI(title="SecureFlow Agentic Engine")
@@ -22,15 +23,14 @@ model = joblib.load('fraud_rf_model.pkl')
 scaler = joblib.load('fraud_scaler.pkl')
 encoders = joblib.load('fraud_label_encoders.pkl')
 
-# 3. Setup LLM Client (Pointing to local Ollama)
+# 3. Setup LLM Client (Pointed to Native Windows Localhost!)
 llm_client = OpenAI(
-    base_url="http://localhost:11434/v1",
+    base_url="http://localhost:11434/v1", 
     api_key="ollama" 
 )
 
 # 4. Define incoming Data Structure
 class Transaction(BaseModel):
-    # Add your 15 features here. Match the exact names from your CSV.
     Day_of_Week: str
     Time: int
     Type_of_Card: str
@@ -44,7 +44,6 @@ class Transaction(BaseModel):
     Gender: str
     Age: float
     Bank: str
-    # Note: 'Transaction ID' and 'Date' were dropped in training, don't include them.
 
 def call_investigator_agent(tx_data: dict, risk_score: float):
     print(f"⚠️ HIGH RISK DETECTED ({risk_score:.2f}). Routing to Investigator Agent...")
@@ -72,12 +71,12 @@ def call_investigator_agent(tx_data: dict, risk_score: float):
     
     try:
         response = llm_client.chat.completions.create(
-            model="qwen3:0.6b", # Make sure this matches the model you downloaded in Ollama!
+            model="qwen3:0.6b", # Make sure this is the exact model name pulled in Ollama
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Risk Score: {risk_score}\nTransaction Context: {context}"}
             ],
-            temperature=0.2 # Keep it low so the agent is highly deterministic and doesn't hallucinate
+            temperature=0.2 
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -91,13 +90,11 @@ async def analyze_transaction(tx: Transaction):
         input_df = pd.DataFrame([tx_dict])
         
         # 1. THE SPACE FIX: Convert JSON underscores back to CSV spaces
-        # This translates "Day_of_Week" -> "Day of Week" so the ML model recognizes it
         input_df.columns = input_df.columns.str.replace('_', ' ')
         
         # 2. CRASH-PROOF ENCODING
         for col, le in encoders.items():
             if col in input_df.columns:
-                # Grab the incoming value
                 val = str(input_df[col].iloc[0])
                 
                 # If the user sends a brand new word the model hasn't seen, 
