@@ -71,7 +71,7 @@ def call_investigator_agent(tx_data: dict, risk_score: float):
     
     try:
         response = llm_client.chat.completions.create(
-            model="qwen3:0.6b", # Make sure this is the exact model name pulled in Ollama
+            model="qwen3:0.6b", 
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Risk Score: {risk_score}\nTransaction Context: {context}"}
